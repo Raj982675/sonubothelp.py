@@ -1,0 +1,2 @@
+# sonubothelp.py
+setup
