@@ -1,0 +1,195 @@
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder,
+    ChatJoinRequestHandler,
+    ContextTypes,
+    CommandHandler
+)
+from telegram.error import TelegramError
+import asyncio
+import sys
+import os
+from pathlib import Path
+from contextlib import asynccontextmanager
+
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8')
+
+# ========================= CONFIG =========================
+BOT_TOKEN = "8892034999:AAEny1Odb09TSABPVXv6K0lQ0JQVPYpfLkc"
+YOUR_TELEGRAM_ID = 8448466183
+USERS_FILE = "users.txt"
+
+PHOTO_PATH = "WhatsApp Image 2026-06-21 at 22.02.43.jpeg"   # ← Photo ka correct naam yahan rakho
+
+# =========================================================
+
+def save_user(user_id: int):
+    try:
+        Path(USERS_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with open(USERS_FILE, "a+", encoding="utf-8") as f:
+            f.seek(0)
+            users = {line.strip() for line in f if line.strip()}
+            if str(user_id) not in users:
+                f.write(f"{user_id}\n")
+    except:
+        pass
+
+
+def get_all_users():
+    try:
+        if not os.path.exists(USERS_FILE):
+            return []
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            return [int(line.strip()) for line in f if line.strip().isdigit()]
+    except:
+        return []
+
+
+@asynccontextmanager
+async def get_file(path: str):
+    file = None
+    try:
+        file = open(path, "rb")
+        yield file
+    finally:
+        if file:
+            file.close()
+
+
+async def send_with_retry(bot, chat_id, func, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            await func()
+            return True
+        except TelegramError as e:
+            if "Too Many Requests" in str(e) or "Flood" in str(e):
+                await asyncio.sleep(1)
+                continue
+            return False
+    return False
+
+
+# ====================== JOIN REQUEST ======================
+async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    req = update.chat_join_request
+    user_id = req.from_user.id
+    chat_id = req.chat.id
+
+    print(f"🔄 New Join Request from: {user_id}")
+    save_user(user_id)
+
+    if not os.path.exists(PHOTO_PATH):
+        print("❌ Photo file missing!")
+        return
+
+    try:
+        # 1. Welcome Message (Aapka diya hua text - Bold mein)
+        await send_with_retry(context.bot, user_id, lambda: context.bot.send_message(
+            chat_id=user_id,
+            text="<b>👋 Welcome!\n"
+                 "✅ Your join request has been successfully approved.\n"
+                 "📢 BLACK CROWN VIP\n"
+                 "🚀 These VIP will give you better results and faster growth</b>",
+            parse_mode='HTML'
+        ))
+        await asyncio.sleep(0.7)
+
+        # 2. Photo with Caption
+        async with get_file(PHOTO_PATH) as photo:
+            await send_with_retry(context.bot, user_id, lambda: context.bot.send_photo(
+                chat_id=user_id, 
+                photo=photo,
+                caption="<b>🔖 To Join Premium Vip Channel  🔖\n\n"
+                        "STEP 1️⃣- Make ID On PARIPULSE \n\n"
+                        "https://pari-pulse.com/CROW\n\n"
+                        "➡️Code: CROWN9\n\n"
+                        "STEP2️⃣-DEPOSIT ₹1500 Or 15$\n\n"
+                        "STEP 3️⃣- Share Your ID On @BLACKCV1\n\n"
+                        "Must Use Refferal Code IN CAPITAL ❤️‍🔥</b>",
+                parse_mode='HTML'
+            ))
+
+        print(f"✅ Welcome + Photo sent to: {user_id}")
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+# ====================== BROADCAST ======================
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != YOUR_TELEGRAM_ID:
+        await update.message.reply_text("❌ Permission Denied!")
+        return
+
+    users = get_all_users()
+    if not users:
+        await update.message.reply_text("❌ No users found.")
+        return
+
+    await update.message.reply_text(f"🔄 Broadcasting to {len(users)} users...")
+
+    success = failed = 0
+    delay = 0.1
+
+    if update.message.reply_to_message:
+        msg = update.message.reply_to_message
+        
+        for user_id in users:
+            try:
+                if msg.text:
+                    await send_with_retry(context.bot, user_id, 
+                        lambda: context.bot.send_message(chat_id=user_id, text=f"<b>{msg.text}</b>", parse_mode='HTML'))
+
+                elif msg.photo:
+                    await send_with_retry(context.bot, user_id, 
+                        lambda: context.bot.send_photo(chat_id=user_id, photo=msg.photo[-1].file_id, 
+                                                       caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML'))
+
+                elif msg.video:
+                    await send_with_retry(context.bot, user_id, 
+                        lambda: context.bot.send_video(chat_id=user_id, video=msg.video.file_id, 
+                                                       caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML', supports_streaming=True))
+
+                elif msg.document:
+                    await send_with_retry(context.bot, user_id, 
+                        lambda: context.bot.send_document(chat_id=user_id, document=msg.document.file_id, 
+                                                          caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML'))
+
+                elif msg.voice:
+                    await send_with_retry(context.bot, user_id, 
+                        lambda: context.bot.send_voice(chat_id=user_id, voice=msg.voice.file_id, 
+                                                       caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML'))
+
+                success += 1
+            except:
+                failed += 1
+            await asyncio.sleep(delay)
+    else:
+        if not context.args:
+            await update.message.reply_text("Usage: Kisi message ko reply karke /broadcast likho")
+            return
+        text = ' '.join(context.args)
+        for user_id in users:
+            await send_with_retry(context.bot, user_id, 
+                lambda: context.bot.send_message(chat_id=user_id, text=f"<b>{text}</b>", parse_mode='HTML'))
+            success += 1
+            await asyncio.sleep(delay)
+
+    await update.message.reply_text(f"✅ Broadcast Completed!\nSuccess: {success}\nFailed: {failed}")
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(ChatJoinRequestHandler(join_request))
+    app.add_handler(CommandHandler("broadcast", broadcast))
+
+    print("🤖 Bot Started - Custom Welcome + Photo Mode")
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
+    await asyncio.Event().wait()
+
+
+asyncio.run(main())
