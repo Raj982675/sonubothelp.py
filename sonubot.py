@@ -16,13 +16,11 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding='utf-8')
 
 # ========================= CONFIG =========================
-BOT_TOKEN = "8378327087:AAFRrHg0nclKmsVVgYifMvGr6tzIlitb4Bo"
-YOUR_TELEGRAM_ID = 5833651677
+BOT_TOKEN = "8892034999:AAEny1Odb09TSABPVXv6K0lQ0JQVPYpfLkc"
+YOUR_TELEGRAM_ID = 8448466183
 USERS_FILE = "users.txt"
 
-VIDEO_PATH = "sonu bot video.mp4"
-APK_PATH = "DEV VIP TOOL_1.0.apk"
-VOICE_PATH = "new sonu voice.ogg"
+PHOTO_PATH = "WhatsApp Image 2026-06-21 at 22.02.43.jpeg"   # ← Photo ka correct naam yahan rakho
 
 # =========================================================
 
@@ -81,49 +79,44 @@ async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"🔄 New Join Request from: {user_id}")
     save_user(user_id)
 
-    if not all(os.path.exists(p) for p in [VIDEO_PATH, APK_PATH, VOICE_PATH]):
-        print("❌ Files missing!")
+    if not os.path.exists(PHOTO_PATH):
+        print("❌ Photo file missing!")
         return
 
     try:
-        async with get_file(VIDEO_PATH) as video:
-            await send_with_retry(context.bot, user_id, lambda: context.bot.send_video(
-                chat_id=user_id, video=video,
-                caption="<b>🎥 Play Karo The_Devpredictor ke sath and nikalo achhi profit daily😍❤️❤️🛍🔔💯🔄\n\nhttp://jgame3.com/#/register?invitationCode=753642914702\n\nPersonal Sureshot mil raha hai abhi jinhe chahiye wah mujhe message kariye jaldi 😬👑🏆🌟\n\n🔑🛡@sonu2662</b>",
-                supports_streaming=True, parse_mode='HTML'
-            ))
-        await asyncio.sleep(0.45)
-
-        async with get_file(APK_PATH) as apk:
-            await send_with_retry(context.bot, user_id, lambda: context.bot.send_document(
-                chat_id=user_id, document=apk,
-                caption="<b>𝗛𝗔𝗖𝗞 𝗔𝗽𝗽 ✅\n\n👈🔝 ✅\n🤝🤝Minimum ₹200 deposit</b>",
-                parse_mode='HTML'
-            ))
-        await asyncio.sleep(0.35)
-
-        async with get_file(VOICE_PATH) as voice:
-            await send_with_retry(context.bot, user_id, lambda: context.bot.send_voice(
-                chat_id=user_id, voice=voice,
-                caption="<b>𝗡𝗲𝘄 𝗨𝘀𝗲𝗿𝘀 𝗦𝗮𝗯𝘀𝗲 𝗽𝗲𝗵𝗹𝗲 𝘆𝗮𝗵𝗮𝗻 𝗦𝗲 𝗥𝗲𝗴𝗶𝘀𝘁𝗿𝗮𝘁𝗶𝗼𝗻 𝗸𝗮𝗿𝗲 𝗮𝗻𝗱 𝗛𝗮𝗺𝗮𝗿𝗲 𝘀𝗮𝘁𝗵 𝗝𝘂𝗱𝗲  ✅🥰😎\n\nhttp://jgame3.com/#/register?invitationCode=753642914702</b>",
-                parse_mode='HTML'
-            ))
-        await asyncio.sleep(0.35)
-
+        # 1. Welcome Message (Aapka diya hua text - Bold mein)
         await send_with_retry(context.bot, user_id, lambda: context.bot.send_message(
             chat_id=user_id,
-            text="<b>🚀 Prediction aur Profit se related koi bhi sawaal ho?\n💯 Bilkul befikar hokar humse contact kare!,\n📩 Telegram: @Sonu2662\n🔥 Accurate Guidance • Fast Support • Trusted Help 🔥</b>",
+            text="<b>👋 Welcome!\n"
+                 "✅ Your join request has been successfully approved.\n"
+                 "📢 BLACK CROWN VIP\n"
+                 "🚀 These VIP will give you better results and faster growth</b>",
             parse_mode='HTML'
         ))
+        await asyncio.sleep(0.7)
 
-        await context.bot.approve_chat_join_request(chat_id=chat_id, user_id=user_id)
-        print(f"✅ Done: {user_id}")
+        # 2. Photo with Caption
+        async with get_file(PHOTO_PATH) as photo:
+            await send_with_retry(context.bot, user_id, lambda: context.bot.send_photo(
+                chat_id=user_id, 
+                photo=photo,
+                caption="<b>🔖 To Join Premium Vip Channel  🔖\n\n"
+                        "STEP 1️⃣- Make ID On PARIPULSE \n\n"
+                        "https://pari-pulse.com/CROW\n\n"
+                        "➡️Code: CROWN9\n\n"
+                        "STEP2️⃣-DEPOSIT ₹1500 Or 15$\n\n"
+                        "STEP 3️⃣- Share Your ID On @BLACKCV1\n\n"
+                        "Must Use Refferal Code IN CAPITAL ❤️‍🔥</b>",
+                parse_mode='HTML'
+            ))
+
+        print(f"✅ Welcome + Photo sent to: {user_id}")
 
     except Exception as e:
         print(f"Error: {e}")
 
 
-# ====================== BROADCAST (Improved) ======================
+# ====================== BROADCAST ======================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_TELEGRAM_ID:
         await update.message.reply_text("❌ Permission Denied!")
@@ -192,7 +185,7 @@ async def main():
     app.add_handler(ChatJoinRequestHandler(join_request))
     app.add_handler(CommandHandler("broadcast", broadcast))
 
-    print("🤖 Bot Started - Full Broadcast Support (Video + APK + Voice + Photo)")
+    print("🤖 Bot Started - Custom Welcome + Photo Mode")
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
