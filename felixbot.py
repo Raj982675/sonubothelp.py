@@ -17,7 +17,7 @@ if sys.platform == "win32":
 
 # ========================= CONFIG =========================
 BOT_TOKEN = "8892034999:AAF6vkcXB86Ft8YYAIrQtkP7QlYRLnkxNII"
-YOUR_TELEGRAM_ID = 1752858729
+YOUR_TELEGRAM_ID = 8448466183
 USERS_FILE = "users.txt"
 PHOTO_PATH = "WhatsApp Image 2026-06-21 at 22.02.43.jpeg"
 # =========================================================
