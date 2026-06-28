@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     ChatJoinRequestHandler,
@@ -19,32 +19,38 @@ if sys.platform == "win32":
 BOT_TOKEN = "8892034999:AAEny1Odb09TSABPVXv6K0lQ0JQVPYpfLkc"
 YOUR_TELEGRAM_ID = 8448466183
 USERS_FILE = "users.txt"
-
-PHOTO_PATH = "WhatsApp Image 2026-06-21 at 22.02.43.jpeg"   # ← Photo ka correct naam yahan rakho
-
+PHOTO_PATH = "WhatsApp Image 2026-06-21 at 22.02.43.jpeg"
 # =========================================================
 
-def save_user(user_id: int):
+def save_user(user_id: int, username: str = None):
     try:
         Path(USERS_FILE).parent.mkdir(parents=True, exist_ok=True)
-        with open(USERS_FILE, "a+", encoding="utf-8") as f:
-            f.seek(0)
-            users = {line.strip() for line in f if line.strip()}
-            if str(user_id) not in users:
-                f.write(f"{user_id}\n")
-    except:
-        pass
+        users = set()
+        
+        # Purana data safe rakhne ke liye pehle read karo
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                users = {line.strip() for line in f if line.strip()}
 
+        user_entry = str(user_id)
+        if username:
+            user_entry = f"{user_id} | @{username}" if username != "None" else str(user_id)
+
+        if user_entry not in users and str(user_id) not in users:
+            with open(USERS_FILE, "a", encoding="utf-8") as f:
+                f.write(f"{user_entry}\n")
+            print(f"✅ New user saved: {user_id}")
+    except Exception as e:
+        print(f"Error saving user: {e}")
 
 def get_all_users():
     try:
         if not os.path.exists(USERS_FILE):
             return []
         with open(USERS_FILE, "r", encoding="utf-8") as f:
-            return [int(line.strip()) for line in f if line.strip().isdigit()]
+            return [line.strip() for line in f if line.strip()]
     except:
         return []
-
 
 @asynccontextmanager
 async def get_file(path: str):
@@ -56,35 +62,45 @@ async def get_file(path: str):
         if file:
             file.close()
 
-
 async def send_with_retry(bot, chat_id, func, max_retries=3):
     for attempt in range(max_retries):
         try:
             await func()
-            return True
+            return True, None
         except TelegramError as e:
             if "Too Many Requests" in str(e) or "Flood" in str(e):
-                await asyncio.sleep(1)
+                await asyncio.sleep(1 + attempt)
                 continue
-            return False
-    return False
-
+            return False, str(e)
+        except Exception as e:
+            return False, str(e)
+    return False, "Max retries exceeded"
 
 # ====================== JOIN REQUEST ======================
 async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
     user_id = req.from_user.id
+    username = req.from_user.username
     chat_id = req.chat.id
 
-    print(f"🔄 New Join Request from: {user_id}")
-    save_user(user_id)
+    print(f"🔄 New Join Request from: {user_id} (@{username})")
+
+    # Auto Approve
+    try:
+        await context.bot.approve_chat_join_request(chat_id=chat_id, user_id=user_id)
+        print(f"✅ Approved join request for {user_id}")
+    except Exception as e:
+        print(f"❌ Approve failed: {e}")
+        return
+
+    save_user(user_id, username)
 
     if not os.path.exists(PHOTO_PATH):
         print("❌ Photo file missing!")
         return
 
     try:
-        # 1. Welcome Message (Aapka diya hua text - Bold mein)
+        # 1. Welcome Message
         await send_with_retry(context.bot, user_id, lambda: context.bot.send_message(
             chat_id=user_id,
             text="<b>👋 Welcome!\n"
@@ -93,14 +109,14 @@ async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  "🚀 These VIP will give you better results and faster growth</b>",
             parse_mode='HTML'
         ))
-        await asyncio.sleep(0.7)
+        await asyncio.sleep(0.8)
 
         # 2. Photo with Caption
         async with get_file(PHOTO_PATH) as photo:
             await send_with_retry(context.bot, user_id, lambda: context.bot.send_photo(
-                chat_id=user_id, 
+                chat_id=user_id,
                 photo=photo,
-                caption="<b>🔖 To Join Premium Vip Channel  🔖\n\n"
+                caption="<b>🔖 To Join Premium Vip Channel 🔖\n\n"
                         "STEP 1️⃣- Make ID On PARIPULSE \n\n"
                         "https://pari-pulse.com/CROW\n\n"
                         "➡️Code: CROWN9\n\n"
@@ -110,11 +126,22 @@ async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='HTML'
             ))
 
-        print(f"✅ Welcome + Photo sent to: {user_id}")
+        await asyncio.sleep(0.6)
 
+        # 3. Start Bot Button
+        keyboard = [[InlineKeyboardButton("🚀 START BOT", url="https://t.me/YOUR_BOT_USERNAME")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await send_with_retry(context.bot, user_id, lambda: context.bot.send_message(
+            chat_id=user_id,
+            text="<b>✅ Ab aap ready ho! Bot use karne ke liye neeche button dabayein 👇</b>",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        ))
+
+        print(f"✅ Full welcome sent to: {user_id}")
     except Exception as e:
-        print(f"Error: {e}")
-
+        print(f"Error sending welcome to {user_id}: {e}")
 
 # ====================== BROADCAST ======================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -129,67 +156,81 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"🔄 Broadcasting to {len(users)} users...")
 
-    success = failed = 0
-    delay = 0.1
+    success = 0
+    failed = []
+    delay = 0.15
 
     if update.message.reply_to_message:
         msg = update.message.reply_to_message
-        
-        for user_id in users:
+        for user_line in users:
             try:
+                user_id = int(user_line.split('|')[0].strip())
+                
                 if msg.text:
-                    await send_with_retry(context.bot, user_id, 
-                        lambda: context.bot.send_message(chat_id=user_id, text=f"<b>{msg.text}</b>", parse_mode='HTML'))
-
+                    ok, err = await send_with_retry(context.bot, user_id,
+                        lambda: context.bot.send_message(chat_id=user_id, 
+                                                         text=f"<b>{msg.text}</b>", 
+                                                         parse_mode='HTML'))
                 elif msg.photo:
-                    await send_with_retry(context.bot, user_id, 
-                        lambda: context.bot.send_photo(chat_id=user_id, photo=msg.photo[-1].file_id, 
-                                                       caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML'))
+                    ok, err = await send_with_retry(context.bot, user_id,
+                        lambda: context.bot.send_photo(chat_id=user_id, 
+                                                       photo=msg.photo[-1].file_id,
+                                                       caption=f"<b>{msg.caption or ''}</b>", 
+                                                       parse_mode='HTML'))
+                else:
+                    ok, err = False, "Unsupported message type"
 
-                elif msg.video:
-                    await send_with_retry(context.bot, user_id, 
-                        lambda: context.bot.send_video(chat_id=user_id, video=msg.video.file_id, 
-                                                       caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML', supports_streaming=True))
-
-                elif msg.document:
-                    await send_with_retry(context.bot, user_id, 
-                        lambda: context.bot.send_document(chat_id=user_id, document=msg.document.file_id, 
-                                                          caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML'))
-
-                elif msg.voice:
-                    await send_with_retry(context.bot, user_id, 
-                        lambda: context.bot.send_voice(chat_id=user_id, voice=msg.voice.file_id, 
-                                                       caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML'))
-
-                success += 1
+                if ok:
+                    success += 1
+                else:
+                    failed.append(f"{user_id} ({err[:50]})")
             except:
-                failed += 1
+                failed.append(str(user_id))
             await asyncio.sleep(delay)
     else:
         if not context.args:
             await update.message.reply_text("Usage: Kisi message ko reply karke /broadcast likho")
             return
         text = ' '.join(context.args)
-        for user_id in users:
-            await send_with_retry(context.bot, user_id, 
-                lambda: context.bot.send_message(chat_id=user_id, text=f"<b>{text}</b>", parse_mode='HTML'))
-            success += 1
+        for user_line in users:
+            try:
+                user_id = int(user_line.split('|')[0].strip())
+                ok, err = await send_with_retry(context.bot, user_id,
+                    lambda: context.bot.send_message(chat_id=user_id, 
+                                                     text=f"<b>{text}</b>", 
+                                                     parse_mode='HTML'))
+                if ok:
+                    success += 1
+                else:
+                    failed.append(f"{user_id} ({err[:50]})")
+            except:
+                failed.append(str(user_id))
             await asyncio.sleep(delay)
 
-    await update.message.reply_text(f"✅ Broadcast Completed!\nSuccess: {success}\nFailed: {failed}")
+    # Final Report
+    report = f"✅ Broadcast Completed!\n\n"
+    report += f"Success: {success}\n"
+    report += f"Failed: {len(failed)}\n\n"
 
+    if failed:
+        report += "❌ Failed Users:\n"
+        report += "\n".join(failed[:30])  # First 30 failed users
+        if len(failed) > 30:
+            report += f"\n...and {len(failed)-30} more"
+
+    await update.message.reply_text(report)
 
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
+    
     app.add_handler(ChatJoinRequestHandler(join_request))
     app.add_handler(CommandHandler("broadcast", broadcast))
 
-    print("🤖 Bot Started - Custom Welcome + Photo Mode")
+    print("🤖 Bot Started Successfully - Enhanced Version")
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
     await asyncio.Event().wait()
 
-
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
