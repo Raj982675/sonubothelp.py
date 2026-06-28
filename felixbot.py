@@ -16,7 +16,10 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding='utf-8')
 
 # ========================= CONFIG =========================
-BOT_TOKEN = "8892034999:AAF6vkcXB86Ft8YYAIrQtkP7QlYRLnkxNII"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    BOT_TOKEN = "8892034999:AAF6vkcXB86Ft8YYAIrQtkP7QlYRLnkxNII"  # Fallback (local ke liye)
+
 YOUR_TELEGRAM_ID = 8448466183
 USERS_FILE = "users.txt"
 PHOTO_PATH = "WhatsApp Image 2026-06-21 at 22.02.43.jpeg"
@@ -38,8 +41,8 @@ def save_user(user_id: int, username: str = None):
             with open(USERS_FILE, "a", encoding="utf-8") as f:
                 f.write(f"{entry}\n")
             print(f"✅ New user saved: {user_id}")
-    except:
-        pass
+    except Exception as e:
+        print(f"Save user error: {e}")
 
 def get_all_users():
     try:
@@ -73,6 +76,17 @@ async def send_with_retry(bot, chat_id, func, max_retries=3):
         except Exception as e:
             return False, str(e)
     return False, "Max retries exceeded"
+
+# ====================== START COMMAND ======================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    username = update.effective_user.username or None
+    save_user(user_id, username)
+    
+    await update.message.reply_text(
+        "<b>👋 Welcome!\n✅ Aap successfully registered ho gaye hain.</b>",
+        parse_mode='HTML'
+    )
 
 # ====================== JOIN REQUEST ======================
 async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -126,7 +140,7 @@ async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         print(f"✅ Full welcome sent to: {user_id}")
     except Exception as e:
-        print(f"Error sending welcome to {user_id}: {e}")
+        print(f"Error sending welcome: {e}")
 
 # ====================== BROADCAST ======================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,64 +169,50 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_id = int(user_line)
                 username = "No Username"
 
-            # Send Message
             if update.message.reply_to_message:
                 msg = update.message.reply_to_message
                 if msg.text:
                     ok, err = await send_with_retry(context.bot, user_id,
-                        lambda: context.bot.send_message(chat_id=user_id, 
-                                                         text=f"<b>{msg.text}</b>", 
-                                                         parse_mode='HTML'))
+                        lambda: context.bot.send_message(chat_id=user_id, text=f"<b>{msg.text}</b>", parse_mode='HTML'))
                 elif msg.photo:
                     ok, err = await send_with_retry(context.bot, user_id,
-                        lambda: context.bot.send_photo(chat_id=user_id, 
-                                                       photo=msg.photo[-1].file_id,
-                                                       caption=f"<b>{msg.caption or ''}</b>", 
-                                                       parse_mode='HTML'))
+                        lambda: context.bot.send_photo(chat_id=user_id, photo=msg.photo[-1].file_id,
+                                                       caption=f"<b>{msg.caption or ''}</b>", parse_mode='HTML'))
                 else:
-                    ok, err = False, "Unsupported type"
+                    ok, err = False, "Unsupported"
             else:
                 text = ' '.join(context.args) if context.args else "Broadcast Message"
                 ok, err = await send_with_retry(context.bot, user_id,
-                    lambda: context.bot.send_message(chat_id=user_id, 
-                                                     text=f"<b>{text}</b>", 
-                                                     parse_mode='HTML'))
+                    lambda: context.bot.send_message(chat_id=user_id, text=f"<b>{text}</b>", parse_mode='HTML'))
 
             if ok:
                 success.append(f"{user_id} (@{username})")
             else:
-                failed.append(f"{user_id} (@{username}) - {err[:50]}")
+                failed.append(f"{user_id} (@{username})")
         except Exception as e:
-            failed.append(f"{user_id} - Error: {str(e)[:50]}")
+            failed.append(f"{user_id} - Error")
 
         await asyncio.sleep(delay)
 
-    # Final Report
     report = f"✅ Broadcast Completed!\n\n"
     report += f"✅ Success: {len(success)} / {len(users)}\n"
     report += f"❌ Failed: {len(failed)}\n\n"
 
     if success:
-        report += "✅ Successful Users:\n"
-        report += "\n".join(success[:30])   # First 30 successful
-        if len(success) > 30:
-            report += f"\n...and {len(success)-30} more\n\n"
-
+        report += "✅ Successful Users:\n" + "\n".join(success[:30]) + "\n\n"
     if failed:
-        report += "❌ Failed Users:\n"
-        report += "\n".join(failed[:30])
-        if len(failed) > 30:
-            report += f"\n...and {len(failed)-30} more"
+        report += "❌ Failed Users:\n" + "\n".join(failed[:30])
 
     await update.message.reply_text(report)
 
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(ChatJoinRequestHandler(join_request))
     app.add_handler(CommandHandler("broadcast", broadcast))
 
-    print("🤖 Bot Started Successfully - Enhanced Broadcast with Usernames")
+    print("🤖 Bot Started Successfully on Railway")
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
